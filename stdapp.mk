@@ -333,18 +333,23 @@ $(sort $(EBIN_DIR) $(TEST_EBIN_DIR) $(ERL_DEPS_DIR) $(ERL_TEST_DEPS_DIR) $(SRC_D
 # Pattern rules
 #
 
+# automatically generated dependencies for header files and local behaviours
+# (there is no point in generating dependencies for behaviours in other
+# applications, since we cannot cause them to be built from the current app)
+# NOTE: currently doesn't find behaviour/transform modules in subdirs of src
+ifdef ERLC_HAS_MMD
+ERLC_FLAGS += -MMD -MP -MT "$$d/$*.beam $@" \
+	-MF $(ERL_DEPS_DIR)/$(patsubst %.beam,%.d,$(@F))
+else
+$(ERL_DEPS_DIR)/%.d $(ERL_TEST_DEPS_DIR)/%.d: %.erl
+	$(PROGRESS)d=$(if $(findstring $<,$(ERL_TEST_SOURCES)),$(TEST_EBIN_DIR),$(EBIN_DIR)); $(ERLC) $(ERLC_FLAGS) -DMERL_NO_TRANSFORM -o $(ERL_DEPS_DIR) -MP -MF $@ -MT "$$d/$*.beam $@" $< && $(GAWK) -v d="$$d" '/^[ \t]*-(behaviou?r\(|compile\({parse_transform,)/ {match($$0, /-(behaviou?r\([ \t]*([^) \t]+)|compile\({parse_transform,[ \t]*([^} \t]+))/, a); m = (a[2] a[3]); if (m != "" && (getline x < ("$(SRC_DIR)/" m ".erl")) >= 0) print "\n" d "/$*.beam: $(EBIN_DIR)/" m ".beam"; else if (m != "" && (getline x < ("$(TEST_DIR)/" m ".erl")) >= 0) print "\n" d "/$*.beam: $(TEST_EBIN_DIR)/" m ".beam"}' < $< >> $@
+endif
+
 $(EBIN_DIR)/%.beam $(TEST_EBIN_DIR)/%.beam: %.erl
 	$(PROGRESS)p=$(if $(findstring $<,$(ERL_TEST_SOURCES)),$(TEST_EBIN_DIR),$(EBIN_DIR)); $(ERLC) -pa "$$p" $(ERLC_FLAGS) -o $(@D) $<
 
 %.erl: %.yrl
 	$(PROGRESS)$(ERLC) $(YRL_FLAGS) -o $(@D) $<
-
-# automatically generated dependencies for header files and local behaviours
-# (there is no point in generating dependencies for behaviours in other
-# applications, since we cannot cause them to be built from the current app)
-# NOTE: currently doesn't find behaviour/transform modules in subdirs of src
-$(ERL_DEPS_DIR)/%.d $(ERL_TEST_DEPS_DIR)/%.d: %.erl
-	$(PROGRESS)d=$(if $(findstring $<,$(ERL_TEST_SOURCES)),$(TEST_EBIN_DIR),$(EBIN_DIR)); $(ERLC) $(ERLC_FLAGS) -DMERL_NO_TRANSFORM -o $(ERL_DEPS_DIR) -MP -MF $@ -MT "$$d/$*.beam $@" $< && $(GAWK) -v d="$$d" '/^[ \t]*-(behaviou?r\(|compile\({parse_transform,)/ {match($$0, /-(behaviou?r\([ \t]*([^) \t]+)|compile\({parse_transform,[ \t]*([^} \t]+))/, a); m = (a[2] a[3]); if (m != "" && (getline x < ("$(SRC_DIR)/" m ".erl")) >= 0) print "\n" d "/$*.beam: $(EBIN_DIR)/" m ".beam"; else if (m != "" && (getline x < ("$(TEST_DIR)/" m ".erl")) >= 0) print "\n" d "/$*.beam: $(TEST_EBIN_DIR)/" m ".beam"}' < $< >> $@
 
 #
 # Installing
