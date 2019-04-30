@@ -227,6 +227,9 @@ ifndef STDAPP_NO_MAKEDEPS
   ERL_TEST_DEPS=$(addprefix $(ERL_TEST_DEPS_DIR)/, $(notdir $(ERL_TEST_OBJECTS:%.beam=%.d)))
   DEPS_FILES += $(ERL_DEPS)
   TEST_DEPS_FILES +=$(ERL_TEST_DEPS)
+  ifndef ERLC_NO_MMD
+    ERLC_FLAGS += -MMD -MP -MF $(ERL_DEPS_DIR)/$(@F:%.beam=%.d)
+  endif
 endif
 
 # the modules of the application, not including any eunit test modules (named "*_tests")
@@ -347,9 +350,12 @@ $(EBIN_DIR)/%.beam $(TEST_EBIN_DIR)/%.beam: %.erl
 %.erl: %.yrl
 	$(PROGRESS)$(ERLC) $(YRL_FLAGS) -o $(@D) $<
 
+ifdef ERLC_NO_MMD
 # automatically generated dependencies for header files
+# (runs as a separate pass before compilation, not needed if -MMD is supported)
 $(ERL_DEPS_DIR)/%.d $(ERL_TEST_DEPS_DIR)/%.d: %.erl
 	$(PROGRESS)d=$(if $(findstring $<,$(ERL_TEST_SOURCES)),$(TEST_EBIN_DIR),$(EBIN_DIR)); $(ERLC) -pa "$$d" $(ERLC_FLAGS) -DMERL_NO_TRANSFORM -o $(ERL_DEPS_DIR) -MP -MF $@ -MT "$$d/$*.beam $@" $<
+endif
 
 # automatically generated dependencies for local behaviours and parse transforms
 # (there is no point in generating dependencies for modules belonging to other
