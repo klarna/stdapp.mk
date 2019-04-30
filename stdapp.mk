@@ -218,8 +218,19 @@ YRL_OBJECTS := $(YRL_SOURCES:%.yrl=%.erl)
 ERL_SOURCES += $(YRL_OBJECTS)
 ERL_OBJECTS := $(addprefix $(EBIN_DIR)/, $(notdir $(ERL_SOURCES:%.erl=%.beam)))
 ERL_TEST_OBJECTS := $(addprefix $(TEST_EBIN_DIR)/, $(notdir $(ERL_TEST_SOURCES:%.erl=%.beam)))
+
+ifndef STDAPP_QUICK_BUILD
 ERL_DEPS=$(ERL_OBJECTS:$(EBIN_DIR)/%.beam=$(ERL_DEPS_DIR)/%.d)
 ERL_TEST_DEPS=$(ERL_TEST_OBJECTS:$(TEST_EBIN_DIR)/%.beam=$(ERL_TEST_DEPS_DIR)/%.d)
+else
+# for quick builds, a single .d file will be built for all sources (and a
+# separate .d file for test sources) - this will however cause more
+# unnecessary work when re-building if only individual files have changed
+ERL_QUICK_DEPS := $(ERL_DEPS_DIR)/$(APPLICATION)-app.d
+ERL_TEST_QUICK_DEPS := $(ERL_TEST_DEPS_DIR)/$(APPLICATION)-test.d
+ERL_DEPS=$(ERL_QUICK_DEPS)
+ERL_TEST_DEPS=$(ERL_TEST_QUICK_DEPS)
+endif
 
 # the modules of the application, not including any eunit test modules (named "*_tests")
 MODULES := $(sort $(filter-out %_tests, $(ERL_OBJECTS:$(EBIN_DIR)/%.beam=%)))
@@ -343,8 +354,17 @@ $(EBIN_DIR)/%.beam $(TEST_EBIN_DIR)/%.beam: %.erl
 # (there is no point in generating dependencies for behaviours in other
 # applications, since we cannot cause them to be built from the current app)
 # NOTE: currently doesn't find behaviour/transform modules in subdirs of src
+ifndef STDAPP_QUICK_BUILD
+# default case - generate one .d file per source file
 $(ERL_DEPS_DIR)/%.d $(ERL_TEST_DEPS_DIR)/%.d: %.erl
 	$(PROGRESS)d=$(if $(findstring $<,$(ERL_TEST_SOURCES)),$(TEST_EBIN_DIR),$(EBIN_DIR)); $(ERLC) $(ERLC_FLAGS) -DMERL_NO_TRANSFORM -o $(ERL_DEPS_DIR) -MP -MF $@ -MT "$$d/$*.beam $@" $< && $(GAWK) -v d="$$d" '/^[ \t]*-(behaviou?r\(|compile\({parse_transform,)/ {match($$0, /-(behaviou?r\([ \t]*([^) \t]+)|compile\({parse_transform,[ \t]*([^} \t]+))/, a); m = (a[2] a[3]); if (m != "" && (getline x < ("$(SRC_DIR)/" m ".erl")) >= 0) print "\n" d "/$*.beam: $(EBIN_DIR)/" m ".beam"; else if (m != "" && (getline x < ("$(TEST_DIR)/" m ".erl")) >= 0) print "\n" d "/$*.beam: $(TEST_EBIN_DIR)/" m ".beam"}' < $< >> $@
+else
+# quick build case - generate one .d file for all source files
+$(ERL_QUICK_DEPS): $(ERL_SOURCES)
+	$(PROGRESS)$(ERLC) -pa $(EBIN_DIR) $(ERLC_FLAGS) -DMERL_NO_TRANSFORM -o $(EBIN_DIR) -M $(ERL_SOURCES) | sed -e 's|^$(EBIN_DIR)|$@ $(EBIN_DIR)|;s|.* undefined parse transform .*||' > $@
+$(ERL_TEST_QUICK_DEPS): $(ERL_TEST_SOURCES)
+	$(PROGRESS)$(ERLC) -pa $(EBIN_DIR) -pa $(TEST_EBIN_DIR) $(ERLC_FLAGS) -DMERL_NO_TRANSFORM -o $(TEST_EBIN_DIR) -M $(ERL_TEST_SOURCES) | sed -e 's|^$(EBIN_DIR)|$@ $(EBIN_DIR)|;s|.* undefined parse transform .*||' > $@
+endif
 
 #
 # Installing
