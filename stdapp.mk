@@ -218,12 +218,16 @@ YRL_OBJECTS := $(YRL_SOURCES:%.yrl=%.erl)
 ERL_SOURCES += $(YRL_OBJECTS)
 ERL_OBJECTS := $(addprefix $(EBIN_DIR)/, $(notdir $(ERL_SOURCES:%.erl=%.beam)))
 ERL_TEST_OBJECTS := $(addprefix $(TEST_EBIN_DIR)/, $(notdir $(ERL_TEST_SOURCES:%.erl=%.beam)))
-ERL_DEPS=$(ERL_OBJECTS:$(EBIN_DIR)/%.beam=$(ERL_DEPS_DIR)/%.d)
-ERL_TEST_DEPS=$(ERL_TEST_OBJECTS:$(TEST_EBIN_DIR)/%.beam=$(ERL_TEST_DEPS_DIR)/%.d)
 MODULE_DEPS_FILE=$(ERL_DEPS_DIR)/$(APPLICATION)-modules.d
 TEST_MODULE_DEPS_FILE=$(ERL_DEPS_DIR)/$(APPLICATION)-test-modules.d
-DEPS_FILES=$(ERL_DEPS) $(MODULE_DEPS_FILE)
-TEST_DEPS_FILES=$(ERL_TEST_DEPS) $(TEST_MODULE_DEPS_FILE)
+DEPS_FILES=$(MODULE_DEPS_FILE)
+TEST_DEPS_FILES=$(TEST_MODULE_DEPS_FILE)
+ifndef STDAPP_NO_MAKEDEPS
+  ERL_DEPS=$(ERL_OBJECTS:$(EBIN_DIR)/%.beam=$(ERL_DEPS_DIR)/%.d)
+  ERL_TEST_DEPS=$(ERL_TEST_OBJECTS:$(TEST_EBIN_DIR)/%.beam=$(ERL_TEST_DEPS_DIR)/%.d)
+  DEPS_FILES += $(ERL_DEPS)
+  TEST_DEPS_FILES +=$(ERL_TEST_DEPS)
+endif
 
 # the modules of the application, not including any eunit test modules (named "*_tests")
 MODULES := $(sort $(filter-out %_tests, $(ERL_OBJECTS:$(EBIN_DIR)/%.beam=%)))
