@@ -220,6 +220,10 @@ ERL_OBJECTS := $(addprefix $(EBIN_DIR)/, $(notdir $(ERL_SOURCES:%.erl=%.beam)))
 ERL_TEST_OBJECTS := $(addprefix $(TEST_EBIN_DIR)/, $(notdir $(ERL_TEST_SOURCES:%.erl=%.beam)))
 ERL_DEPS=$(ERL_OBJECTS:$(EBIN_DIR)/%.beam=$(ERL_DEPS_DIR)/%.d)
 ERL_TEST_DEPS=$(ERL_TEST_OBJECTS:$(TEST_EBIN_DIR)/%.beam=$(ERL_TEST_DEPS_DIR)/%.d)
+MODULE_DEPS_FILE=$(ERL_DEPS_DIR)/$(APPLICATION)-modules.d
+TEST_MODULE_DEPS_FILE=$(ERL_DEPS_DIR)/$(APPLICATION)-test-modules.d
+DEPS_FILES=$(ERL_DEPS) $(MODULE_DEPS_FILE)
+TEST_DEPS_FILES=$(ERL_TEST_DEPS) $(TEST_MODULE_DEPS_FILE)
 
 # the modules of the application, not including any eunit test modules (named "*_tests")
 MODULES := $(sort $(filter-out %_tests, $(ERL_OBJECTS:$(EBIN_DIR)/%.beam=%)))
@@ -248,15 +252,15 @@ VPATH := $(sort $(VPATH) $(dir $(ERL_SOURCES) $(ERL_TEST_SOURCES)) \
 # read the .d file corresponding to each .erl file, UNLESS making clean!
 NODEPS_TARGETS += clean distclean realclean clean-tests clean-docs
 ifneq (,$(filter-out $(NODEPS_TARGETS),$(MAKECMDGOALS)))
-  -include $(ERL_DEPS)
+  -include $(DEPS_FILES)
   # only read the .d file for test modules if actually building tests
   ifneq (,$(filter tests $(ERL_TEST_OBJECTS),$(MAKECMDGOALS)))
-    -include $(ERL_TEST_DEPS)
+    -include $(TEST_DEPS_FILES)
   endif
 endif
 
-$(ERL_DEPS): | $(ERL_DEPS_DIR)
-$(ERL_TEST_DEPS): | $(ERL_TEST_DEPS_DIR)
+$(DEPS_FILES): | $(ERL_DEPS_DIR)
+$(TEST_DEPS_FILES): | $(ERL_TEST_DEPS_DIR)
 
 build: $(ERL_OBJECTS) $(APP_FILE)
 
@@ -272,7 +276,7 @@ distclean: clean clean-deps
 
 .PHONY: clean-deps
 clean-deps:
-	rm -f $(ERL_DEPS) $(ERL_TEST_DEPS)
+	rm -f $(DEPS_FILES) $(TEST_DEPS_FILES)
 
 clean: clean-tests
 	rm -f $(ERL_OBJECTS) $(YRL_OBJECTS) $(APP_FILE)
@@ -339,12 +343,21 @@ $(EBIN_DIR)/%.beam $(TEST_EBIN_DIR)/%.beam: %.erl
 %.erl: %.yrl
 	$(PROGRESS)$(ERLC) $(YRL_FLAGS) -o $(@D) $<
 
-# automatically generated dependencies for header files and local behaviours
-# (there is no point in generating dependencies for behaviours in other
+# automatically generated dependencies for header files
+$(ERL_DEPS_DIR)/%.d $(ERL_TEST_DEPS_DIR)/%.d: %.erl
+	$(PROGRESS)d=$(if $(findstring $<,$(ERL_TEST_SOURCES)),$(TEST_EBIN_DIR),$(EBIN_DIR)); $(ERLC) -pa "$$d" $(ERLC_FLAGS) -DMERL_NO_TRANSFORM -o $(ERL_DEPS_DIR) -MP -MF $@ -MT "$$d/$*.beam $@" $<
+
+# automatically generated dependencies for local behaviours and parse transforms
+# (there is no point in generating dependencies for modules belonging to other
 # applications, since we cannot cause them to be built from the current app)
 # NOTE: currently doesn't find behaviour/transform modules in subdirs of src
-$(ERL_DEPS_DIR)/%.d $(ERL_TEST_DEPS_DIR)/%.d: %.erl
-	$(PROGRESS)d=$(if $(findstring $<,$(ERL_TEST_SOURCES)),$(TEST_EBIN_DIR),$(EBIN_DIR)); $(ERLC) $(ERLC_FLAGS) -DMERL_NO_TRANSFORM -o $(ERL_DEPS_DIR) -MP -MF $@ -MT "$$d/$*.beam $@" $< && $(GAWK) -v d="$$d" '/^[ \t]*-(behaviou?r\(|compile\({parse_transform,)/ {match($$0, /-(behaviou?r\([ \t]*([^) \t]+)|compile\({parse_transform,[ \t]*([^} \t]+))/, a); m = (a[2] a[3]); if (m != "" && (getline x < ("$(SRC_DIR)/" m ".erl")) >= 0) print "\n" d "/$*.beam: $(EBIN_DIR)/" m ".beam"; else if (m != "" && (getline x < ("$(TEST_DIR)/" m ".erl")) >= 0) print "\n" d "/$*.beam: $(TEST_EBIN_DIR)/" m ".beam"}' < $< >> $@
+# (the call to getline is an awk trick for checking existence of files)
+$(MODULE_DEPS_FILE): $(ERL_SOURCES)
+	@rm -f "$@" && for src in $^; do $(GAWK) -v s="$$src" -v m="$$(basename $$src .erl)" '/^[ \t]*-(behaviou?r\(|compile\({parse_transform,)/ {match($$0, /-(behaviou?r\([ \t]*([^) \t]+)|compile\({parse_transform,[ \t]*([^} \t]+))/, a); m2 = (a[2] a[3]); if (m2 != "" && (getline x < ("$(SRC_DIR)/" m2 ".erl")) >= 0) print "$(ERL_DEPS_DIR)/" m ".d $(EBIN_DIR)/" m ".beam: $(EBIN_DIR)/" m2 ".beam\n" >> "$@"}' "$$src"; done
+
+# tests may depend on regular modules as well as on other test modules
+$(TEST_MODULE_DEPS_FILE): $(ERL_TEST_SOURCES)
+	@rm -f "$@" && for src in $^; do $(GAWK) -v s="$$src" -v m="$$(basename $$src .erl)" '/^[ \t]*-(behaviou?r\(|compile\({parse_transform,)/ {match($$0, /-(behaviou?r\([ \t]*([^) \t]+)|compile\({parse_transform,[ \t]*([^} \t]+))/, a); m2 = (a[2] a[3]); if (m != "" && (getline x < ("$(SRC_DIR)/" m2 ".erl")) >= 0) print "$(ERL_DEPS_DIR)/" m ".d $(TEST_EBIN_DIR)/" m ".beam: $(EBIN_DIR)/" m2 ".beam\n" >> "$@"; else if (m != "" && (getline x < ("$(TEST_DIR)/" m2 ".erl")) >= 0) print "$(ERL_DEPS_DIR)/" m ".d $(TEST_EBIN_DIR)/" m ".beam: $(TEST_EBIN_DIR)/" m2 ".beam\n" >> "$@"}' "$$src"; done
 
 #
 # Installing
