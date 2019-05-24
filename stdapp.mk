@@ -126,11 +126,11 @@ PROGRESS = $(STDAPP_PROGRESS_$(V))
 ifndef APPLICATION
   appsrc = $(wildcard $(SRC_DIR)/*.app.src)
   ifneq ($(appsrc),)
-    APPLICATION := $(patsubst $(SRC_DIR)/%.app.src,%,$(appsrc))
+    APPLICATION := $(notdir $(appsrc:%.app.src=%))
   else
     appfile = $(wildcard $(EBIN_DIR)/*.app)
     ifneq ($(appfile),)
-      APPLICATION := $(patsubst $(EBIN_DIR)/%.app,%,$(appfile))
+      APPLICATION := $(notdir $(appfile:%.app=%))
     else
       APPLICATION := $(notdir $(CURDIR))
     endif
@@ -223,8 +223,8 @@ TEST_MODULE_DEPS_FILE=$(ERL_DEPS_DIR)/$(APPLICATION)-test-modules.d
 DEPS_FILES=$(MODULE_DEPS_FILE)
 TEST_DEPS_FILES=$(TEST_MODULE_DEPS_FILE)
 ifndef STDAPP_NO_MAKEDEPS
-  ERL_DEPS=$(ERL_OBJECTS:$(EBIN_DIR)/%.beam=$(ERL_DEPS_DIR)/%.d)
-  ERL_TEST_DEPS=$(ERL_TEST_OBJECTS:$(TEST_EBIN_DIR)/%.beam=$(ERL_TEST_DEPS_DIR)/%.d)
+  ERL_DEPS=$(addprefix $(ERL_DEPS_DIR)/, $(notdir $(ERL_OBJECTS:%.beam=%.d)))
+  ERL_TEST_DEPS=$(addprefix $(ERL_TEST_DEPS_DIR)/, $(notdir $(ERL_TEST_OBJECTS:%.beam=%.d)))
   DEPS_FILES += $(ERL_DEPS)
   TEST_DEPS_FILES +=$(ERL_TEST_DEPS)
 endif
